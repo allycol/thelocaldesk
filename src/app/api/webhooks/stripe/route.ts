@@ -55,6 +55,19 @@ export async function POST(req: Request) {
   return NextResponse.json({ received: true });
 }
 
+// Stripe has shipped the "current_period_end" field in two shapes depending on
+// account billing-mode config and stripe-node version: top-level on the
+// Subscription, or per subscription-item. Read both defensively so this
+// keeps working regardless of which one the installed package's types expose.
+function currentPeriodEndOf(subscription: Stripe.Subscription): Date | null {
+  const raw = subscription as unknown as {
+    current_period_end?: number;
+    items: { data: Array<{ current_period_end?: number }> };
+  };
+  const seconds = raw.current_period_end ?? raw.items.data[0]?.current_period_end;
+  return typeof seconds === 'number' ? new Date(seconds * 1000) : null;
+}
+
 async function upsertUser(email: string | null, stripeCustomerId: string | null): Promise<number | null> {
   if (!email) return null;
   await pool.query(
@@ -76,7 +89,7 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
   if (session.mode === 'subscription' && typeof session.subscription === 'string') {
     const subscription = await stripe.subscriptions.retrieve(session.subscription);
     const planKey = session.metadata?.plan_key ?? 'unknown';
-    const periodEnd = new Date(subscription.items.data[0]?.current_period_end * 1000);
+    const periodEnd = currentPeriodEndOf(subscription);
 
     await pool.query(
       `INSERT INTO subscriptions
@@ -110,7 +123,7 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
 }
 
 async function handleSubscriptionChange(subscription: Stripe.Subscription) {
-  const periodEnd = new Date(subscription.items.data[0]?.current_period_end * 1000);
+  const periodEnd = currentPeriodEndOf(subscription);
   await pool.query(
     `UPDATE subscriptions
      SET status = ?, current_period_end = ?, cancel_at_period_end = ?
