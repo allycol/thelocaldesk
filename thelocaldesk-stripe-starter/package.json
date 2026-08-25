@@ -1,0 +1,16 @@
+{
+  "name": "thelocaldesk-stripe-starter",
+  "version": "0.1.0",
+  "description": "Starter Stripe integration for thelocaldesk.au — Checkout (one-time + subscriptions) and webhook handling, plain Node.js (no framework).",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "dependencies": {
+    "stripe": "^17.0.0"
+  }
+}
