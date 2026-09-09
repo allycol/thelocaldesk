@@ -23,6 +23,13 @@ export default async function PricingPage() {
         <h1>Pricing</h1>
         <p className="subtitle">Flexible memberships and day passes — something for everyone.</p>
 
+        <div className="pricing-promo">
+          <p>
+            <strong>🐣 Early bird pricing</strong> — lock in these rates while they last. There&rsquo;s
+            also no minimum subscription period yet (a 3-month minimum is coming later).
+          </p>
+        </div>
+
         <Suspense>
           <ProductTabs products={products} />
         </Suspense>
