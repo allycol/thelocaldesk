@@ -18,8 +18,8 @@ export default async function HomePage() {
           A coworking space for <span className="accent">everyone</span>.
         </h1>
         <p>
-          A thoughtfully considered shared workspace: hot-desks, dedicated workstations &amp; meeting
-          rooms. Work, meet, create together.
+          A thoughtfully considered shared workspace: hot-desks, dedicated workstations &amp; collaboration
+          areas. Work, meet, create together.
         </p>
         <Link href="/pricing" className="hero-cta">
           View pricing
