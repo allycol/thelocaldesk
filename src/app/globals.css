@@ -775,6 +775,29 @@ h1 {
   max-width: 480px;
 }
 
+/* ---------- Checkout status pages (booking/membership success/cancelled) ---------- */
+
+.status-page {
+  padding: 3rem 0 4rem;
+}
+
+.status-page h1 {
+  font-size: 4rem;
+  margin-bottom: 0.5rem;
+}
+
+@media (max-width: 640px) {
+  .status-page h1 {
+    font-size: 2.5rem;
+  }
+}
+
+.status-page p.subtitle {
+  color: var(--muted);
+  margin-bottom: 0;
+  max-width: 42rem;
+}
+
 /* ---------- Subscribe section (footer, all pages) ---------- */
 
 .subscribe-section {
