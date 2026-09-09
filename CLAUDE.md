@@ -354,23 +354,27 @@ groundwork done so far:
   section above) — was missing entirely; would have made `/account` fail
   outright in live mode.
 
-Still outstanding before actually clicking "Publish to Live":
-- **`APP_BASE_URL` still needs setting to the real production domain** in
-  GoDaddy's env vars — it's the Stripe checkout success/cancel redirect
-  target; currently still `localhost` as far as this file's own copy of
-  `.env` shows.
-- **Terms of Service URL for live mode is unconfirmed** — this is the
-  setting `consent_collection.terms_of_service` on Checkout depends on.
-  Couldn't find any way to read or write it via the Stripe API in this SDK
-  version (checked `accounts.retrieve()` including `.settings` — no
-  matching field), so it has to be checked manually in the Dashboard
-  (Settings > Business > Public details, or search "Terms of Service"),
-  confirmed while the Live/Test toggle shows Live.
+Since done, 2026-09-10:
+- `APP_BASE_URL` updated to the real production domain in GoDaddy's
+  Publish env vars.
+- Terms of service URL confirmed set for live mode via the Stripe
+  Dashboard UI directly (no API path exists for this setting in the
+  installed SDK version — checked `accounts.retrieve()` including
+  `.settings`, no matching field).
+
+Still outstanding / deliberately deferred:
 - Whether the Preview-style access-gate/share-token requirement applies to
   a genuinely published app is still untested.
-- A real live-mode end-to-end test purchase (small amount, refunded after)
-  hasn't been done yet — everything above is configuration-level
-  verification, not a full live checkout run.
+- **A real live-mode end-to-end test purchase was deliberately skipped
+  pre-publish** (2026-09-10) — offered (temporarily point local dev at
+  live keys + `stripe listen --live`, complete a real purchase, refund
+  after), declined as unnecessary overhead given the site currently gets
+  no real traffic. Decision: **verify live mode for real once the app is
+  actually published**, rather than pre-testing against local/Preview.
+  When that happens: do one small real purchase (Day Pass is cheapest),
+  confirm the DB write, the tax invoice (now has the ABN), the
+  confirmation email, and the "Manage membership" flow all work, then
+  refund/cancel it via the Dashboard.
 
 <!-- BEGIN:nextjs-agent-rules -->
 
