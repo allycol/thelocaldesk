@@ -62,7 +62,7 @@ export default async function HomePage() {
 
         <Link href="/pricing?category=students" className="student-promo">
           <p>
-            <strong>🎓 Student or tutor?</strong> Whether you need a quiet place to study or a space
+            <strong>📚 Student or tutor?</strong> Whether you need a quiet place to study or a space
             to teach, we&rsquo;ve got flexible passes built for you.
           </p>
           <span className="student-promo-cta">See student pricing →</span>
