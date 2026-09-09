@@ -13,7 +13,7 @@ const firaMono = Fira_Mono({
 
 export const metadata: Metadata = {
   title: 'The Local Desk',
-  description: 'Coworking memberships, day passes, and meeting rooms.',
+  description: 'Coworking memberships, day passes, and collaboration areas.',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
