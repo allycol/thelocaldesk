@@ -296,6 +296,46 @@ h1 {
   font-size: 0.9rem;
 }
 
+/* ---------- Student promo (homepage) ---------- */
+/* Deliberately styled apart from the teaser-card grid above — an alert-
+   style callout (same visual language as the Pricing page's early-bird
+   box) rather than a 5th matching card, since Students isn't a category
+   we're ready to feature alongside the others yet. */
+
+.student-promo {
+  display: block;
+  background: var(--badge);
+  border: 1px solid var(--accent);
+  border-radius: 10px;
+  padding: 1.25rem 1.5rem;
+  margin-top: 1.5rem;
+  text-decoration: none;
+  color: var(--fg);
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.student-promo:hover {
+  border-color: var(--fg);
+  background: var(--bg-raised);
+}
+
+.student-promo p {
+  margin: 0 0 0.5rem;
+  font-size: 0.95rem;
+  line-height: 1.6;
+}
+
+.student-promo strong {
+  color: var(--accent);
+}
+
+.student-promo-cta {
+  display: inline-block;
+  color: var(--accent);
+  font-weight: 700;
+  font-size: 0.9rem;
+}
+
 /* ---------- Founder note (homepage) ---------- */
 
 .founder-note {
