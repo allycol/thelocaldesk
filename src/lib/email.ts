@@ -75,3 +75,16 @@ export async function sendPurchaseConfirmation(params: {
     textContent: body,
   });
 }
+
+export async function sendAccountLink(params: { toEmail: string; verifyUrl: string }): Promise<void> {
+  await sendEmail({
+    senderName: 'The Local Desk',
+    to: [{ email: params.toEmail }],
+    subject: 'Manage your membership',
+    textContent:
+      `Click the link below to view your billing history, update your payment method, or cancel your ` +
+      `membership:\n\n${params.verifyUrl}\n\n` +
+      `This link expires in 15 minutes. If you didn't request this, you can safely ignore this email.\n\n` +
+      `The Local Desk`,
+  });
+}

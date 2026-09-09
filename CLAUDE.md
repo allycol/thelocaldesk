@@ -164,43 +164,54 @@ exists in Stripe, so the clause may not even apply yet.
 
 Still not implemented from the original compliance review: tax-invoice
 wording on receipts (Stripe's own invoice/receipt Dashboard settings, not
-app code), and the member dashboard below.
+app code).
 
-### TODO: member self-service cancellation dashboard
+### Member self-service — "Manage membership" (built 2026-09-09)
 
-Deliberately deferred (2026-09-08) — build later, not part of initial
-launch. This is the single most-enforced item in the original compliance
-review (ACCC already acts on missing self-service cancellation under
-existing misleading-conduct powers, ahead of the 2027 "click to cancel"
-deadline), so don't let it slip indefinitely.
+Was the single most-enforced item in the original compliance review (ACCC
+already acts on missing self-service cancellation under existing
+misleading-conduct powers, ahead of the 2027 "click to cancel" deadline) —
+now built, not deferred.
 
-**Recommended approach: Stripe's hosted Customer/Billing Portal**
-(`stripe.billingPortal.sessions.create()`), not a custom-built account
-system. It gives, out of the box, everything stop #5 of the compliance
-review asked for — view invoices, update the card on file, cancel a
-subscription — as a Stripe-hosted page requiring almost no custom UI. The
-only app-side work is identifying *which* Stripe customer a visitor is
-(since there's no login system at all currently):
-- Simplest: email a magic link containing a freshly-created Billing Portal
-  session URL (portal sessions are single-use/short-lived, so this has to
-  be generated per-visit via a small API route, not a static link) — no
-  password/session system needed at all.
-- More conventional: a lightweight login (email + magic link or OTP) tied
-  to the existing `users` table, landing on a small dashboard that links
-  out to a freshly-created portal session.
+**Deliberately not a custom account system.** [/account](src/app/account/page.tsx)
+takes just an email address and, via a passwordless magic link
+([src/lib/magicLink.ts](src/lib/magicLink.ts) — a short-lived HMAC-signed
+token, `ACCOUNT_LINK_SECRET`, no DB table, no session system), redirects
+straight to a **Stripe-hosted Billing Portal session**
+(`stripe.billingPortal.sessions.create()` in
+[api/account/verify/route.ts](src/app/api/account/verify/route.ts)). Stripe's
+own page provides billing history, payment-method updates, email updates,
+and cancellation — no custom UI needed for any of it. This was a deliberate
+choice over building real auth (password reset, sessions, a custom billing
+page): far less code, far smaller security surface (nothing to leak but a
+15-minute link to a Stripe page, no passwords anywhere), and Stripe's portal
+is more polished than anything worth building in-house for this.
 
-Either way, cancellation should default to `cancel_at_period_end: true`
-(matches the Membership Agreement's "takes effect at the end of your
-current billing cycle" wording) rather than immediate cancellation. The
-webhook handler already listens for `customer.subscription.updated` and
-`customer.subscription.deleted` and syncs `subscriptions.status` in the DB
-— no webhook-side changes needed once cancellation exists, it already
-flows through the same path tested end-to-end back in September.
+The Billing Portal's feature set (which updates are allowed, whether
+cancellation is immediate or `at_period_end`) lives in a **Configuration**
+object on the Stripe account, not in this codebase — created once via a
+one-off API call (`stripe.billingPortal.configurations.create()`), not
+through the Dashboard UI. It's mode-scoped like Tax IDs: **the test-mode
+configuration was created 2026-09-09; a live-mode equivalent needs creating
+separately before Publish**, or `billingPortal.sessions.create()` will fail
+outright once switched to live keys. Cancellation is configured
+`mode: 'at_period_end'`, matching the Membership Agreement's "takes effect
+at the end of your current billing cycle" wording — the webhook handler
+already listens for `customer.subscription.updated`/`.deleted` and syncs
+`subscriptions.status`, so no webhook-side changes were needed.
 
-Also worth doing at the same time: a "Cancel membership" link somewhere
-reachable in the site nav/footer once this exists — compliance stop #5
-expects it reachable in roughly the same number of clicks it took to sign
-up, not buried.
+"Manage membership" is linked from the site footer
+([Footer.tsx](src/components/Footer.tsx)) — reachable in one click from any
+page, satisfying the compliance bar of being at least as easy to reach as
+signing up.
+
+Confirmed working end-to-end (2026-09-09) against a real test-mode
+subscription: requested a link, redirected to a real Billing Portal session
+showing the actual subscription, payment method, and paid invoice history.
+Also confirmed an expired/invalid token redirects to `/account?error=...`
+with a visible message rather than failing silently, and that requesting a
+link for an unregistered email returns the identical generic response as a
+registered one (no account-enumeration leak).
 
 ## Transactional email — two different paths, deliberately
 
