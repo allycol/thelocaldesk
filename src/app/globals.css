@@ -794,8 +794,34 @@ h1 {
 
 .status-page p.subtitle {
   color: var(--muted);
-  margin-bottom: 0;
+  margin-bottom: 1.5rem;
   max-width: 42rem;
+}
+
+.status-page .hero-cta {
+  margin-top: 0.5rem;
+}
+
+.status-note {
+  color: var(--muted);
+  max-width: 42rem;
+  line-height: 1.6;
+  margin: 0 0 1.5rem;
+}
+
+.status-note a {
+  color: var(--accent);
+}
+
+.status-cta {
+  color: var(--muted);
+  margin: 0;
+}
+
+.status-cta a {
+  color: var(--accent);
+  text-decoration: none;
+  font-weight: 700;
 }
 
 /* ---------- Subscribe section (footer, all pages) ---------- */
