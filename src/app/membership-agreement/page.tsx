@@ -8,7 +8,7 @@ export const metadata: Metadata = {
 };
 
 // Prices are managed in Stripe, not this codebase — fetch on every
-// request rather than at build time (same pattern as /products).
+// request rather than at build time (same pattern as /pricing).
 // `revalidate` alone still statically prerenders once during `next
 // build`, which fails on hosts (like GoDaddy Node.js Hosting) that don't
 // inject secrets until the app actually starts — `force-dynamic` skips

@@ -4,7 +4,7 @@ import { ProductTabs } from '@/components/ProductTabs';
 import { getProducts } from '@/lib/products';
 
 export const metadata: Metadata = {
-  title: 'Products — The Local Desk',
+  title: 'Pricing — The Local Desk',
 };
 
 // Products are managed in Stripe, not this codebase — fetch on every
@@ -14,13 +14,13 @@ export const metadata: Metadata = {
 // actually starts — `force-dynamic` skips build-time generation entirely.
 export const dynamic = 'force-dynamic';
 
-export default async function ProductsPage() {
+export default async function PricingPage() {
   const products = await getProducts();
 
   return (
-    <main className="products-page">
+    <main className="pricing-page">
       <div className="container">
-        <h1>Products</h1>
+        <h1>Pricing</h1>
         <p className="subtitle">Flexible memberships and day passes — something for everyone.</p>
 
         <Suspense>

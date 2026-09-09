@@ -21,8 +21,8 @@ export default async function HomePage() {
           A thoughtfully considered shared workspace: hot-desks, dedicated workstations &amp; meeting
           rooms. Work, meet, create together.
         </p>
-        <Link href="/products" className="hero-cta">
-          View memberships
+        <Link href="/pricing" className="hero-cta">
+          View pricing
         </Link>
       </div>
 
@@ -33,7 +33,7 @@ export default async function HomePage() {
       <div className="container">
         <div className="section-heading">
           <h2>Find your space</h2>
-          <Link href="/products">View all products →</Link>
+          <Link href="/pricing">View all pricing →</Link>
         </div>
         <div className="teaser-grid">
           {CATEGORY_ORDER.map((category) => {
@@ -44,7 +44,7 @@ export default async function HomePage() {
             const info = CATEGORY_INFO[category];
 
             return (
-              <Link href={`/products?category=${category}`} className="teaser-card" key={category}>
+              <Link href={`/pricing?category=${category}`} className="teaser-card" key={category}>
                 {info.image && (
                   <div className="teaser-image">
                     <img src={info.image} alt="" />
