@@ -1,13 +1,14 @@
 import type Stripe from 'stripe';
 import { stripe } from './stripe';
 
-export type ProductCategory = 'full_time' | 'flexible' | 'daily' | 'virtual';
+export type ProductCategory = 'full_time' | 'flexible' | 'daily' | 'virtual' | 'students';
 
 export const CATEGORY_LABELS: Record<ProductCategory, string> = {
   full_time: 'Full time',
   flexible: 'Flexible',
   daily: 'Daily',
   virtual: 'Virtual',
+  students: 'Students',
 };
 
 // Category copy/imagery is edited here, not in Stripe — categories are our
@@ -30,9 +31,22 @@ export const CATEGORY_INFO: Record<ProductCategory, { description: string; image
     description: 'A business address and mail handling without a desk — for when you need a presence, not a seat.',
     image: null,
   },
+  students: {
+    description: 'Affordable study passes for students and tutors — flexible hours, no long-term commitment.',
+    image: null,
+  },
 };
 
-export const CATEGORY_ORDER: ProductCategory[] = ['full_time', 'flexible', 'daily', 'virtual'];
+// Full order — used by /pricing's category tabs and the Membership
+// Agreement's live price table, both of which should reflect every
+// sellable category.
+export const CATEGORY_ORDER: ProductCategory[] = ['full_time', 'flexible', 'daily', 'virtual', 'students'];
+
+// Homepage teaser grid only — deliberately a subset of CATEGORY_ORDER.
+// `students` is intentionally left off here for now (still deciding how/
+// whether to feature it on the homepage) even though it's live on
+// /pricing and in the Membership Agreement.
+export const HOME_CATEGORY_ORDER: ProductCategory[] = ['full_time', 'flexible', 'daily', 'virtual'];
 
 export interface Product {
   priceId: string;
@@ -49,7 +63,13 @@ export interface Product {
 }
 
 export function isProductCategory(value: unknown): value is ProductCategory {
-  return value === 'full_time' || value === 'flexible' || value === 'daily' || value === 'virtual';
+  return (
+    value === 'full_time' ||
+    value === 'flexible' ||
+    value === 'daily' ||
+    value === 'virtual' ||
+    value === 'students'
+  );
 }
 
 function formatDollars(amount: number): string {

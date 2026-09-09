@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { CATEGORY_INFO, CATEGORY_LABELS, CATEGORY_ORDER, getProducts, productsByCategory } from '@/lib/products';
+import { CATEGORY_INFO, CATEGORY_LABELS, HOME_CATEGORY_ORDER, getProducts, productsByCategory } from '@/lib/products';
 
 // Products are managed in Stripe, not this codebase — fetch on every
 // request rather than at build time. `revalidate` alone still statically
@@ -36,7 +36,7 @@ export default async function HomePage() {
           <Link href="/pricing">View all pricing →</Link>
         </div>
         <div className="teaser-grid">
-          {CATEGORY_ORDER.map((category) => {
+          {HOME_CATEGORY_ORDER.map((category) => {
             const items = productsByCategory(products, category);
             if (items.length === 0) return null;
             const fromAmount = Math.min(...items.map((p) => p.unitAmount)) / 100;
