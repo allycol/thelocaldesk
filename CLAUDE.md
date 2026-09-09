@@ -278,6 +278,20 @@ secret involved.
 
 ## Known gotchas already worked around in code
 
+- `package.json`'s `build` script is `rm -rf .next && next build`, not
+  plain `next build` — **don't simplify this away.** GoDaddy's "Try
+  rebuild" appears to persist the `.next` directory across attempts
+  instead of wiping it. After the `/products` → `/pricing` and
+  `/where-we-are` → `/location` route rename (2026-09-09), rebuilds
+  started failing with an error pointing at the deleted
+  `src/app/products/page.tsx` — almost certainly a stale
+  `.next/types/app/**/page.ts` (Next's internal route-validation file,
+  which imports each page module by relative path) surviving from before
+  the rename. Bumping `package.json`'s version first did *not* fix it,
+  ruling out anything keyed on that; explicitly deleting `.next` before
+  every build did (confirmed working on GoDaddy 2026-09-10). There's no
+  cache-clear option in GoDaddy's dashboard UI, so this has to be enforced
+  from the build script itself.
 - [src/lib/stripe.ts](src/lib/stripe.ts) constructs the Stripe client lazily
   via a `Proxy`, not at module load. `next build` evaluates every route
   module to collect its metadata, so an eager `new Stripe(...)` fails the
