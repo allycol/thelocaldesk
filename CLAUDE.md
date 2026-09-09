@@ -82,13 +82,26 @@ locally — both gitignored, never actually deployed).
 Sandbox account: "AIC Ecommerce PTY Ltd". **Products, prices, descriptions,
 and images are managed entirely in the Stripe Dashboard**, not hardcoded —
 [src/lib/products.ts](src/lib/products.ts) fetches them live
-(`stripe.products.list`, 60s ISR revalidate on `/` and `/products`), so
-there's no `plans.ts`-style price-ID file to keep in sync. Every product
-needs Product metadata `category` set to one of `full_time` / `flexible` /
-`daily` / `virtual` (see `CATEGORY_ORDER` in products.ts) — a product with a
-missing or unrecognised category is silently skipped from the site. Adding a
-5th category needs a code change (that Set of valid values, `CATEGORY_LABELS`,
-`CATEGORY_INFO`); everything else about a new product is Dashboard-only.
+(`stripe.products.list`, fetched fresh on every request — see the
+`force-dynamic` gotcha above — on `/`, `/pricing`, and
+`/membership-agreement`), so there's no `plans.ts`-style price-ID file to
+keep in sync. Every product needs Product metadata `category` set to one of
+`full_time` / `flexible` / `daily` / `virtual` (see `CATEGORY_ORDER` in
+products.ts) — a product with a missing or unrecognised category is
+silently skipped from the site. Adding a 5th category needs a code change
+(that Set of valid values, `CATEGORY_LABELS`, `CATEGORY_INFO`); everything
+else about a new product is Dashboard-only.
+
+**Test and live mode have entirely separate product catalogs** (Stripe
+doesn't share Products/Prices across modes). The live-mode catalog was
+created 2026-09-10 by scripting a straight copy from test mode (same name,
+description, metadata, tax code, price, currency, tax_behavior, and billing
+interval for all 12 products) — not recreated by hand in the Dashboard, so
+it should match test mode exactly as of that date. **The two catalogs are
+not kept in sync automatically going forward** — a product added/changed in
+test mode (e.g. while prototyping) needs the same change made separately in
+live mode (Dashboard, with Live mode toggled on) before it'll actually show
+up or charge correctly for real customers.
 
 Product `metadata.daily_rate` (a plain dollar string, e.g. `"30"`) drives the
 "≈ $X/day" comparison line on product cards — optional, omit to hide it.
@@ -150,7 +163,7 @@ page. Content came from real docx drafts (see git history around
 AIC Ecommerce Pty Ltd is GST-registered.
 
 The **Membership Agreement's price table is generated live from Stripe**
-(same `getProducts()`/`revalidate = 60` pattern as `/products`), not
+(same `getProducts()`/`force-dynamic` pattern as `/pricing`), not
 hardcoded — grouped by `CATEGORY_ORDER`, so a new product with a valid
 `category` shows up there automatically. Don't hand-edit that table back to
 static rows.
