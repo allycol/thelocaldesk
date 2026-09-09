@@ -87,10 +87,23 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
   const stripeCustomerId = typeof session.customer === 'string' ? session.customer : null;
   const userId = await upsertUser(email, stripeCustomerId);
 
+  // Populated below for whichever mode this session is — a real Stripe tax
+  // invoice (ABN, GST breakdown, PDF), not just a payment receipt. Required
+  // for GST-registered sales in Australia, not merely nice-to-have.
+  let invoicePdfUrl: string | null = null;
+
   if (session.mode === 'subscription' && typeof session.subscription === 'string') {
-    const subscription = await stripe.subscriptions.retrieve(session.subscription);
+    // Subscriptions always generate an Invoice per billing cycle — expand
+    // latest_invoice to grab its PDF without a second API round-trip.
+    const subscription = await stripe.subscriptions.retrieve(session.subscription, {
+      expand: ['latest_invoice'],
+    });
     const planKey = session.metadata?.plan_key ?? 'unknown';
     const periodEnd = currentPeriodEndOf(subscription);
+
+    if (subscription.latest_invoice && typeof subscription.latest_invoice !== 'string') {
+      invoicePdfUrl = subscription.latest_invoice.invoice_pdf ?? null;
+    }
 
     await pool.query(
       `INSERT INTO subscriptions
@@ -120,6 +133,14 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
        ON DUPLICATE KEY UPDATE status = 'paid'`,
       [userId, session.id, itemKey, session.amount_total ?? 0, session.currency ?? 'aud']
     );
+
+    // Only present when `invoice_creation.enabled` was set on the Checkout
+    // Session (see api/checkout/one-time/route.ts) — one-time payments
+    // don't get an Invoice by default the way subscriptions do.
+    if (typeof session.invoice === 'string') {
+      const invoice = await stripe.invoices.retrieve(session.invoice);
+      invoicePdfUrl = invoice.invoice_pdf ?? null;
+    }
   }
 
   // A failed confirmation email shouldn't fail the whole webhook — the
@@ -128,14 +149,14 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
   // idempotent) without actually fixing the email problem.
   if (email) {
     try {
-      await sendPurchaseNotification(session, email);
+      await sendPurchaseNotification(session, email, invoicePdfUrl);
     } catch (err) {
       console.error('sendPurchaseConfirmation failed:', err);
     }
   }
 }
 
-async function sendPurchaseNotification(session: Stripe.Checkout.Session, email: string) {
+async function sendPurchaseNotification(session: Stripe.Checkout.Session, email: string, invoicePdfUrl: string | null) {
   const lineItems = await stripe.checkout.sessions.listLineItems(session.id, { expand: ['data.price.product'] });
   const firstItem = lineItems.data[0];
   const product = firstItem?.price?.product;
@@ -151,6 +172,7 @@ async function sendPurchaseNotification(session: Stripe.Checkout.Session, email:
     productName,
     amountFormatted,
     isSubscription: session.mode === 'subscription',
+    invoicePdfUrl,
   });
 }
 

@@ -45,21 +45,27 @@ export async function sendPurchaseConfirmation(params: {
   productName: string;
   amountFormatted: string;
   isSubscription: boolean;
+  invoicePdfUrl: string | null;
 }): Promise<void> {
-  const { toEmail, productName, amountFormatted, isSubscription } = params;
+  const { toEmail, productName, amountFormatted, isSubscription, invoicePdfUrl } = params;
 
   const subject = isSubscription ? `You're in — welcome to The Local Desk` : `Booking confirmed — ${productName}`;
+
+  // GST-registered sales need a real tax invoice, not just a payment
+  // receipt — invoicePdfUrl is Stripe's own hosted PDF (ABN, GST
+  // breakdown included), not something we generate ourselves.
+  const invoiceLine = invoicePdfUrl ? `\n\nTax invoice: ${invoicePdfUrl}` : '';
 
   const body = isSubscription
     ? `Thanks for joining The Local Desk!\n\n` +
       `Plan: ${productName}\n` +
-      `Amount: ${amountFormatted}\n\n` +
+      `Amount: ${amountFormatted}${invoiceLine}\n\n` +
       `Your membership renews automatically until you cancel — cancelling takes effect at the end of your ` +
       `current billing cycle. See the Membership Agreement on our site for full terms.\n\n` +
       `See you at the desk,\nThe Local Desk`
     : `Thanks for your booking!\n\n` +
       `Item: ${productName}\n` +
-      `Amount: ${amountFormatted}\n\n` +
+      `Amount: ${amountFormatted}${invoiceLine}\n\n` +
       `See you soon,\nThe Local Desk`;
 
   await sendEmail({

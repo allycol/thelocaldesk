@@ -24,6 +24,11 @@ export async function POST(req: Request) {
       customer_email: typeof customerEmail === 'string' ? customerEmail : undefined,
       automatic_tax: { enabled: true },
       consent_collection: { terms_of_service: 'required' },
+      // One-time payments don't generate a Stripe Invoice by default (only
+      // subscriptions do) — this turns one on so a real tax invoice (ABN,
+      // GST breakdown, PDF) exists to link from the purchase-confirmation
+      // email, not just a payment receipt.
+      invoice_creation: { enabled: true },
       metadata: { item_key: priceId },
       success_url: `${APP_BASE_URL}/booking/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${APP_BASE_URL}/booking/cancelled`,
