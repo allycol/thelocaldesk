@@ -16,7 +16,7 @@ export const CATEGORY_LABELS: Record<ProductCategory, string> = {
 // public/images/categories/ and set its path below once available.
 export const CATEGORY_INFO: Record<ProductCategory, { description: string; image: string | null }> = {
   full_time: {
-    description: 'Your own space, every day — dedicated desks and private offices for a permanent base.',
+    description: 'Your own space, every day — dedicated desks for a permanent base.',
     image: null,
   },
   flexible: {
