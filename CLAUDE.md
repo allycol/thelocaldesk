@@ -364,8 +364,9 @@ database:
   Subscription cancellation not yet re-tested against Preview specifically
   (only verified locally so far).
 
-**Publish (production) cutover — in progress as of 2026-09-10.** Live-mode
-groundwork done so far:
+**Publish (production) cutover — complete as of 2026-09-10.** The app is
+live at `thelocaldesk.au` with a real confirmed end-to-end purchase. What
+it took, for reference:
 - Live-mode Stripe webhook endpoint created (same 5 events as test mode —
   see Stripe section above) and `STRIPE_SECRET_KEY`/`STRIPE_WEBHOOK_SECRET`
   updated to live values in GoDaddy's env vars.
@@ -388,20 +389,25 @@ Since done, 2026-09-10:
   Dashboard UI directly (no API path exists for this setting in the
   installed SDK version — checked `accounts.retrieve()` including
   `.settings`, no matching field).
+- Custom domain (`thelocaldesk.au`, registered in the same GoDaddy
+  account) attached to the app — DNS configured automatically by GoDaddy
+  since domain and hosting share an account, no manual records needed.
+- The stale-`.next`-cache Publish failure (see Known gotchas above) and a
+  wrong-key-published-to-Publish-env incident were both hit and fixed
+  along the way.
+- Live-mode product catalog created (see Stripe section above) — the app
+  was showing no products on the real domain until this was done, since
+  test/live catalogs don't share.
+- **The app is live at `thelocaldesk.au`.** A real end-to-end purchase was
+  completed successfully post-publish, confirming the whole chain works
+  for real: checkout, webhook-driven DB write, tax invoice, confirmation
+  email, and "Manage membership" all functioning in live mode.
 
 Still outstanding / deliberately deferred:
 - Whether the Preview-style access-gate/share-token requirement applies to
-  a genuinely published app is still untested.
-- **A real live-mode end-to-end test purchase was deliberately skipped
-  pre-publish** (2026-09-10) — offered (temporarily point local dev at
-  live keys + `stripe listen --live`, complete a real purchase, refund
-  after), declined as unnecessary overhead given the site currently gets
-  no real traffic. Decision: **verify live mode for real once the app is
-  actually published**, rather than pre-testing against local/Preview.
-  When that happens: do one small real purchase (Day Pass is cheapest),
-  confirm the DB write, the tax invoice (now has the ABN), the
-  confirmation email, and the "Manage membership" flow all work, then
-  refund/cancel it via the Dashboard.
+  a genuinely published app was never separately tested — moot now, since
+  the live purchase test above already proves the real domain works
+  end-to-end regardless.
 
 <!-- BEGIN:nextjs-agent-rules -->
 
