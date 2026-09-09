@@ -271,6 +271,21 @@ secret involved.
   module to collect its metadata, so an eager `new Stripe(...)` fails the
   build in any environment where secrets aren't injected until runtime
   (reproduced locally: build failed with `STRIPE_SECRET_KEY is not set`).
+- **The same failure mode can reappear one layer up, via page-level ISR.**
+  `/`, `/products`, and `/membership-agreement` all call `getProducts()`
+  (a real Stripe call) inside an async Server Component. Setting
+  `export const revalidate = 60` alone still statically prerenders the
+  page once during `next build` (ISR's first render), which invokes
+  Stripe at build time regardless of `stripe.ts`'s own lazy Proxy —
+  harmless locally since `next build` auto-loads `.env`, but fails on
+  GoDaddy with the identical `STRIPE_SECRET_KEY is not set` error, since
+  its build step doesn't have secrets injected yet (confirmed: 2026-09-10,
+  first real GoDaddy deploy attempt after the Stripe-source-of-truth
+  refactor introduced these ISR pages). Fixed by using
+  `export const dynamic = 'force-dynamic'` on all three instead — skips
+  build-time generation entirely, fetches fresh per request. If a future
+  page fetches Stripe data inside a Server Component, give it
+  `force-dynamic` too rather than `revalidate`.
 - Checkout session creation intentionally omits `billing_mode` — the
   `stripe` package version GoDaddy's build resolves doesn't type that field.
 - [src/app/api/webhooks/stripe/route.ts](src/app/api/webhooks/stripe/route.ts)
