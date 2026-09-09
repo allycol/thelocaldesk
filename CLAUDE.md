@@ -191,14 +191,15 @@ The Billing Portal's feature set (which updates are allowed, whether
 cancellation is immediate or `at_period_end`) lives in a **Configuration**
 object on the Stripe account, not in this codebase — created once via a
 one-off API call (`stripe.billingPortal.configurations.create()`), not
-through the Dashboard UI. It's mode-scoped like Tax IDs: **the test-mode
-configuration was created 2026-09-09; a live-mode equivalent needs creating
-separately before Publish**, or `billingPortal.sessions.create()` will fail
-outright once switched to live keys. Cancellation is configured
-`mode: 'at_period_end'`, matching the Membership Agreement's "takes effect
-at the end of your current billing cycle" wording — the webhook handler
-already listens for `customer.subscription.updated`/`.deleted` and syncs
-`subscriptions.status`, so no webhook-side changes were needed.
+through the Dashboard UI. It's mode-scoped like Tax IDs: a test-mode
+configuration was created 2026-09-09, and the **live-mode equivalent was
+also created 2026-09-10** once live keys were issued (`bpc_1UDbao...`,
+confirmed `is_default: true`) — both now exist, so `billingPortal.sessions.create()`
+works in either mode. Cancellation is configured `mode: 'at_period_end'`,
+matching the Membership Agreement's "takes effect at the end of your
+current billing cycle" wording — the webhook handler already listens for
+`customer.subscription.updated`/`.deleted` and syncs `subscriptions.status`,
+so no webhook-side changes were needed.
 
 "Manage membership" is linked from the site footer
 ([Footer.tsx](src/components/Footer.tsx)) — reachable in one click from any
@@ -336,14 +337,40 @@ database:
   Subscription cancellation not yet re-tested against Preview specifically
   (only verified locally so far).
 
-Not yet done: the **Publish** (production) cutover. As of 2026-09-04 the app
-has never been published — GoDaddy's dashboard shows "You haven't yet
-published your app." Publishing needs: clicking "Publish to Live" (may
-require payment, though the current beta allows 1 free published app), its
-own DB credentials, live-mode Stripe keys, a separate live-mode webhook
-endpoint, and confirmation of whether the same access-gate/share-token
-requirement applies to a published app (untested — likely not, but not
-verified). Deliberately deferred until the app itself is feature-complete.
+**Publish (production) cutover — in progress as of 2026-09-10.** Live-mode
+groundwork done so far:
+- Live-mode Stripe webhook endpoint created (same 5 events as test mode —
+  see Stripe section above) and `STRIPE_SECRET_KEY`/`STRIPE_WEBHOOK_SECRET`
+  updated to live values in GoDaddy's env vars.
+- Live-mode account confirmed fully verified (`charges_enabled`,
+  `payouts_enabled`, `details_submitted` all true, no outstanding
+  requirements).
+- Live-mode Tax settings already correctly configured (real default tax
+  code, GST active) — no action needed there.
+- Live-mode ABN (26 611 700 979) added as a Tax ID — it had been added to
+  the wrong mode twice before (test, apparently, despite attempts to add it
+  live); confirmed present via API this time.
+- Live-mode Billing Portal Configuration created (see "Manage membership"
+  section above) — was missing entirely; would have made `/account` fail
+  outright in live mode.
+
+Still outstanding before actually clicking "Publish to Live":
+- **`APP_BASE_URL` still needs setting to the real production domain** in
+  GoDaddy's env vars — it's the Stripe checkout success/cancel redirect
+  target; currently still `localhost` as far as this file's own copy of
+  `.env` shows.
+- **Terms of Service URL for live mode is unconfirmed** — this is the
+  setting `consent_collection.terms_of_service` on Checkout depends on.
+  Couldn't find any way to read or write it via the Stripe API in this SDK
+  version (checked `accounts.retrieve()` including `.settings` — no
+  matching field), so it has to be checked manually in the Dashboard
+  (Settings > Business > Public details, or search "Terms of Service"),
+  confirmed while the Live/Test toggle shows Live.
+- Whether the Preview-style access-gate/share-token requirement applies to
+  a genuinely published app is still untested.
+- A real live-mode end-to-end test purchase (small amount, refunded after)
+  hasn't been done yet — everything above is configuration-level
+  verification, not a full live checkout run.
 
 <!-- BEGIN:nextjs-agent-rules -->
 
