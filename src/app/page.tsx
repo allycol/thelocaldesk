@@ -1,10 +1,12 @@
 import Link from 'next/link';
 import { CATEGORY_INFO, CATEGORY_LABELS, CATEGORY_ORDER, getProducts, productsByCategory } from '@/lib/products';
 
-// Products are managed in Stripe, not this codebase — re-fetch periodically
-// rather than baking a snapshot in at build time, so edits in the Stripe
-// Dashboard show up without a redeploy.
-export const revalidate = 60;
+// Products are managed in Stripe, not this codebase — fetch on every
+// request rather than at build time. `revalidate` alone still statically
+// prerenders once during `next build`, which fails on hosts (like
+// GoDaddy Node.js Hosting) that don't inject secrets until the app
+// actually starts — `force-dynamic` skips build-time generation entirely.
+export const dynamic = 'force-dynamic';
 
 export default async function HomePage() {
   const products = await getProducts();

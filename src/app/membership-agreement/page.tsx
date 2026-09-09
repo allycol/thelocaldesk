@@ -7,10 +7,13 @@ export const metadata: Metadata = {
   title: 'Membership Agreement — The Local Desk',
 };
 
-// Prices are managed in Stripe, not this codebase — re-fetch periodically
-// rather than baking a snapshot in at build time, so edits in the Stripe
-// Dashboard show up here without a redeploy (same pattern as /products).
-export const revalidate = 60;
+// Prices are managed in Stripe, not this codebase — fetch on every
+// request rather than at build time (same pattern as /products).
+// `revalidate` alone still statically prerenders once during `next
+// build`, which fails on hosts (like GoDaddy Node.js Hosting) that don't
+// inject secrets until the app actually starts — `force-dynamic` skips
+// build-time generation entirely.
+export const dynamic = 'force-dynamic';
 
 function billingLabel(product: Product): string {
   if (!product.billingInterval) return 'Single use';
