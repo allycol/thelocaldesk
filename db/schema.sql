@@ -55,3 +55,16 @@ CREATE TABLE IF NOT EXISTS webhook_events (
   received_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   UNIQUE KEY uq_webhook_events_stripe_id (stripe_event_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Get in touch form submissions — kept as a durable record independent of
+-- the Brevo transactional email actually sending (it can fail or land in
+-- spam without us knowing otherwise).
+CREATE TABLE IF NOT EXISTS contact_messages (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(255) NOT NULL,
+  email VARCHAR(255) NOT NULL,
+  message TEXT NOT NULL,
+  email_sent BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  KEY idx_contact_messages_created_at (created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

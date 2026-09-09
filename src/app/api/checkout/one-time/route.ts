@@ -1,21 +1,30 @@
 import { NextResponse } from 'next/server';
 import { stripe, APP_BASE_URL } from '@/lib/stripe';
-import { PRICES, isOneTimeItem } from '@/lib/plans';
 
 export async function POST(req: Request) {
   try {
-    const { plan, customerEmail } = await req.json();
+    const { priceId, customerEmail } = await req.json();
 
-    if (typeof plan !== 'string' || !isOneTimeItem(plan)) {
-      return NextResponse.json({ error: `Unknown item: ${plan}` }, { status: 400 });
+    if (typeof priceId !== 'string' || !priceId) {
+      return NextResponse.json({ error: 'Missing priceId' }, { status: 400 });
+    }
+
+    // Prices are managed in Stripe directly (see src/lib/products.ts), so
+    // validate against Stripe itself rather than a hardcoded list — this
+    // also catches a mismatched request (e.g. a subscription price posted
+    // here).
+    const price = await stripe.prices.retrieve(priceId);
+    if (!price.active || price.type !== 'one_time') {
+      return NextResponse.json({ error: 'Not a valid one-time price' }, { status: 400 });
     }
 
     const session = await stripe.checkout.sessions.create({
       mode: 'payment',
-      line_items: [{ price: PRICES[plan], quantity: 1 }],
+      line_items: [{ price: priceId, quantity: 1 }],
       customer_email: typeof customerEmail === 'string' ? customerEmail : undefined,
       automatic_tax: { enabled: true },
-      metadata: { item_key: plan },
+      consent_collection: { terms_of_service: 'required' },
+      metadata: { item_key: priceId },
       success_url: `${APP_BASE_URL}/booking/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${APP_BASE_URL}/booking/cancelled`,
     });

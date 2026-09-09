@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import type Stripe from 'stripe';
 import { stripe } from '@/lib/stripe';
 import { pool } from '@/lib/db';
+import { sendPurchaseConfirmation } from '@/lib/email';
 
 // Route handlers get the raw, unparsed Request body — needed here because
 // Stripe signature verification hashes the exact bytes Stripe sent.
@@ -120,6 +121,37 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
       [userId, session.id, itemKey, session.amount_total ?? 0, session.currency ?? 'aud']
     );
   }
+
+  // A failed confirmation email shouldn't fail the whole webhook — the
+  // purchase is already recorded above, and a thrown error here would make
+  // Stripe retry the event (redundant, since the DB writes are already
+  // idempotent) without actually fixing the email problem.
+  if (email) {
+    try {
+      await sendPurchaseNotification(session, email);
+    } catch (err) {
+      console.error('sendPurchaseConfirmation failed:', err);
+    }
+  }
+}
+
+async function sendPurchaseNotification(session: Stripe.Checkout.Session, email: string) {
+  const lineItems = await stripe.checkout.sessions.listLineItems(session.id, { expand: ['data.price.product'] });
+  const firstItem = lineItems.data[0];
+  const product = firstItem?.price?.product;
+  const productName = product && typeof product !== 'string' && !product.deleted ? product.name : 'your order';
+
+  const amountFormatted = new Intl.NumberFormat('en-AU', {
+    style: 'currency',
+    currency: (session.currency ?? 'aud').toUpperCase(),
+  }).format((session.amount_total ?? 0) / 100);
+
+  await sendPurchaseConfirmation({
+    toEmail: email,
+    productName,
+    amountFormatted,
+    isSubscription: session.mode === 'subscription',
+  });
 }
 
 async function handleSubscriptionChange(subscription: Stripe.Subscription) {

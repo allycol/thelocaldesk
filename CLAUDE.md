@@ -9,7 +9,13 @@ for all payments. See [README.md](README.md) for the file map and local setup.
 This constrains several things in the code — don't "simplify" them away:
 
 - `server.js` is a **custom server**, not `next start` — it binds explicitly
-  to `process.env.PORT` and `0.0.0.0`, per GoDaddy's requirement.
+  to `process.env.PORT` and `0.0.0.0`, per GoDaddy's requirement. **Caveat**:
+  GoDaddy's own official Claude Code skill (see below) actually recommends
+  plain `next start` for standard Next.js apps and says not to replace it
+  with a custom server — `next start` already reads `PORT` from env. The
+  custom server here predates that guidance and hasn't caused a known
+  problem, but if `server.js`/schema-auto-apply ever behaves unexpectedly
+  after a real `Publish`, this mismatch is the first thing to revisit.
 - `package.json` needs non-empty `name`, `version`, and `main` (`main` is set
   to `"server.js"`), and a real `build` script — GoDaddy's deploy checklist
   requires all three.
@@ -21,33 +27,90 @@ This constrains several things in the code — don't "simplify" them away:
   range picks at deploy time.
 
 Deploy is git-based: the GoDaddy app is connected directly to
-`github.com/allycol/thelocaldesk` (branch `main`) — push to `main` and
-redeploy from the GoDaddy dashboard.
+`github.com/allycol/thelocaldesk` (branch `main`).
+
+**Official skill**: GoDaddy publishes a Claude Code skill for this platform —
+installed locally at `~/.claude/skills/godaddy-nodejs-hosting` (via
+`npx skills add godaddy/nodejs-hosting-agent-skill --skill godaddy-nodejs-hosting -g -a claude-code`).
+Its `contract.md` documents the exact deploy contract, and
+`scripts/validate-paas.mjs <project-dir>` checks a project against it —
+worth re-running after any deploy-relevant change. This repo currently
+passes with only two harmless warnings (`.env` and `node_modules` present
+locally — both gitignored, never actually deployed).
 
 ### GoDaddy app structure
 
-- Two environments: **Preview** and **Publish**. Each has its own Secrets
-  tab and its own provisioned MySQL database (own Database tab per
-  environment) — **never sync/copy secrets from Preview to Publish**, since
-  that would point production at Preview's database instance instead of its
-  own.
+- One app ("thelocaldesk"), with a **Preview** state and a **Published**
+  state, not two fully separate deployed apps. As of 2026-09, the app has
+  never actually been published — everything tested so far is Preview.
+- **Preview and Publish share a single provisioned MySQL database** (per
+  GoDaddy's own Database panel: "the hosted database shared by preview and
+  publish") — this contradicts an earlier assumption in this file that each
+  environment gets its own DB. Still worth being careful with secrets, since
+  they *are* per-environment even if the DB isn't.
+- **"Update Preview" (pull from GitHub) ≠ "Restart Preview App".** Preview
+  normally runs in a live-reload `next dev` process (by platform design, for
+  fast iteration) — pulling new code into that process does **not** run
+  `db/apply-schema.js` or bind via `server.js`, since dev mode never touches
+  either. Only an explicit **restart** pushes the app through GoDaddy's real
+  `install → build → start` pipeline (i.e. `node server.js`). Confirm which
+  mode is currently running from Runtime Logs: `next dev` at the top means
+  live-preview mode; `node server.js` + `Database schema is up to date.`
+  means the real production path ran.
+- **Preview URLs require an access token on every request, including
+  webhooks.** The preview link (`https://<app-id>.preview.c38.airoapp.ai`)
+  gates all requests — plain requests get `401 Unauthorized` from the
+  platform itself, before ever reaching the Next.js app. The token
+  (`?airoShareToken=...`, visible in Runtime Logs request lines, or on the
+  app's Preview URL in the dashboard) has to be appended to *any* URL that
+  needs to reach Preview from outside a logged-in browser session —
+  including the Stripe webhook endpoint URL (see Stripe section below).
+  There's no indication this gating applies to a genuinely Published app.
 - Env vars are only injected into the process at startup — restart the app
   after adding/changing a secret.
 - `db/apply-schema.js` applies `db/schema.sql` (`CREATE TABLE IF NOT EXISTS`,
-  safe to re-run) automatically on every `server.js` boot, rather than
+  safe to re-run) automatically on every `server.js` boot (i.e. only when
+  actually running the production start path — see above), rather than
   requiring `npm run db:init` to be run against the DB manually — GoDaddy's
-  provisioned database isn't reachable from a local machine. A schema
-  failure is logged but doesn't block startup (Checkout doesn't need the DB;
-  only the webhook handler does).
+  provisioned database isn't reachable from a local machine, though it *can*
+  be browsed read-only (schema and data) via the dashboard's **Database**
+  panel. A schema failure is logged but doesn't block startup (Checkout
+  doesn't need the DB; only the webhook handler does).
 
 ## Stripe
 
-Sandbox account: "AIC Ecommerce PTY Ltd". Products/Prices already exist for
-Hot Desk / Dedicated Desk / Private Office memberships, Day Pass, and Meeting
-Room — Price IDs are in [src/lib/plans.ts](src/lib/plans.ts) (overridable via
-env vars). GST/Tax is configured, including a default tax code — Checkout
-will fail with `"You must specify a tax code..."` if that default ever gets
-cleared (Stripe Dashboard > Settings > Tax > Tax settings).
+Sandbox account: "AIC Ecommerce PTY Ltd". **Products, prices, descriptions,
+and images are managed entirely in the Stripe Dashboard**, not hardcoded —
+[src/lib/products.ts](src/lib/products.ts) fetches them live
+(`stripe.products.list`, 60s ISR revalidate on `/` and `/products`), so
+there's no `plans.ts`-style price-ID file to keep in sync. Every product
+needs Product metadata `category` set to one of `full_time` / `flexible` /
+`daily` / `virtual` (see `CATEGORY_ORDER` in products.ts) — a product with a
+missing or unrecognised category is silently skipped from the site. Adding a
+5th category needs a code change (that Set of valid values, `CATEGORY_LABELS`,
+`CATEGORY_INFO`); everything else about a new product is Dashboard-only.
+
+Product `metadata.daily_rate` (a plain dollar string, e.g. `"30"`) drives the
+"≈ $X/day" comparison line on product cards — optional, omit to hide it.
+
+GST/Tax is configured, including a default tax code — Checkout will fail
+with `"You must specify a tax code..."` if that default ever gets cleared
+(Stripe Dashboard > Settings > Tax > Tax settings). **Prices should have
+`tax_behavior: inclusive`** — the site displays `unit_amount` as the final
+price with no "+ GST" suffix, so an `exclusive` price means the amount
+charged at checkout won't match what's displayed. `tax_behavior` can't be
+edited on an existing Price; a wrong one needs a new Price created and set
+as the Product's `default_price`.
+
+**Checkout consent checkbox**: both checkout routes set
+`consent_collection: { terms_of_service: 'required' }`, which shows an
+unticked "I agree to ... Terms of Service and Privacy Policy" checkbox above
+the Pay button, required before paying. This depends on a **Terms of
+service** URL being set in Stripe Dashboard > Settings > Business > Public
+details (`dashboard.stripe.com/settings/public`) — currently set to
+`/membership-agreement`. If that URL is ever cleared, checkout session
+creation will likely start failing outright, so don't remove
+`consent_collection` without also removing/updating that Dashboard field.
 
 The webhook destination (Stripe Dashboard > Workbench > Webhooks) must be
 configured with:
@@ -63,6 +126,143 @@ configured with:
 
 Each environment (Preview/Publish) and each Stripe mode (test/live) needs its
 own webhook destination, since each has a different signing secret.
+
+**Preview's webhook URL needs the share token appended**, e.g.
+`https://<app-id>.preview.c38.airoapp.ai/api/webhooks/stripe?airoShareToken=<token>`
+— otherwise every delivery gets rejected with a 401 by GoDaddy's own access
+gate before it reaches the app (see GoDaddy app structure above). Query
+params on the endpoint URL don't affect signature verification (Stripe signs
+the raw body, not the URL). Double-check the signing secret pasted into
+`STRIPE_WEBHOOK_SECRET` character-for-character if signature verification
+keeps failing — a mis-pasted secret was the actual root cause the one time
+this got debugged at length (see git history / session notes around
+2026-09-04).
+
+## Legal / compliance pages
+
+Three pages exist to meet Australian Consumer Law / Privacy Act obligations
+for a subscription business: [/privacy-policy](src/app/privacy-policy/page.tsx),
+[/membership-agreement](src/app/membership-agreement/page.tsx),
+[/refund-policy](src/app/refund-policy/page.tsx) — linked from the site
+footer ([src/components/Footer.tsx](src/components/Footer.tsx)) on every
+page. Content came from real docx drafts (see git history around
+2026-09-08); business address is Shop 2, 27 Collins Street, Kiama, NSW 2533,
+AIC Ecommerce Pty Ltd is GST-registered.
+
+The **Membership Agreement's price table is generated live from Stripe**
+(same `getProducts()`/`revalidate = 60` pattern as `/products`), not
+hardcoded — grouped by `CATEGORY_ORDER`, so a new product with a valid
+`category` shows up there automatically. Don't hand-edit that table back to
+static rows.
+
+Any unresolved detail is rendered on the live page itself as a highlighted
+`<Tbd>` marker (see [src/components/LegalPage.tsx](src/components/LegalPage.tsx))
+rather than guessed — grep for `<Tbd` to find what's still outstanding. As
+of 2026-09-08, only the Fixed-Term Membership term lengths (Membership
+Agreement clause 7) remain unresolved — no fixed-term product currently
+exists in Stripe, so the clause may not even apply yet.
+
+Still not implemented from the original compliance review: tax-invoice
+wording on receipts (Stripe's own invoice/receipt Dashboard settings, not
+app code), and the member dashboard below.
+
+### TODO: member self-service cancellation dashboard
+
+Deliberately deferred (2026-09-08) — build later, not part of initial
+launch. This is the single most-enforced item in the original compliance
+review (ACCC already acts on missing self-service cancellation under
+existing misleading-conduct powers, ahead of the 2027 "click to cancel"
+deadline), so don't let it slip indefinitely.
+
+**Recommended approach: Stripe's hosted Customer/Billing Portal**
+(`stripe.billingPortal.sessions.create()`), not a custom-built account
+system. It gives, out of the box, everything stop #5 of the compliance
+review asked for — view invoices, update the card on file, cancel a
+subscription — as a Stripe-hosted page requiring almost no custom UI. The
+only app-side work is identifying *which* Stripe customer a visitor is
+(since there's no login system at all currently):
+- Simplest: email a magic link containing a freshly-created Billing Portal
+  session URL (portal sessions are single-use/short-lived, so this has to
+  be generated per-visit via a small API route, not a static link) — no
+  password/session system needed at all.
+- More conventional: a lightweight login (email + magic link or OTP) tied
+  to the existing `users` table, landing on a small dashboard that links
+  out to a freshly-created portal session.
+
+Either way, cancellation should default to `cancel_at_period_end: true`
+(matches the Membership Agreement's "takes effect at the end of your
+current billing cycle" wording) rather than immediate cancellation. The
+webhook handler already listens for `customer.subscription.updated` and
+`customer.subscription.deleted` and syncs `subscriptions.status` in the DB
+— no webhook-side changes needed once cancellation exists, it already
+flows through the same path tested end-to-end back in September.
+
+Also worth doing at the same time: a "Cancel membership" link somewhere
+reachable in the site nav/footer once this exists — compliance stop #5
+expects it reachable in roughly the same number of clicks it took to sign
+up, not buried.
+
+## Transactional email — two different paths, deliberately
+
+There are now **two separate mechanisms** for sending real (non-newsletter)
+email, and they're not interchangeable — don't consolidate them without
+re-reading this section:
+
+- **Get in touch — contact form** uses **GoDaddy Node.js Hosting's native
+  email gateway**
+  ([src/lib/emailGateway.ts](src/lib/emailGateway.ts), called from
+  [api/contact/route.ts](src/app/api/contact/route.ts)), not Brevo. The
+  GoDaddy hosting skill's own contract (rule C13, see
+  `~/.claude/skills/godaddy-nodejs-hosting/email.md`) is explicit: use the
+  platform's loopback gateway (`http://127.0.0.1:2525/api/email/send`),
+  not a third-party API key — it's the officially supported pattern for
+  this specific host (sender identity/domain verification handled
+  automatically, one less secret to manage). `emailGateway.ts` is a
+  verbatim copy of the skill's vended helper — keep it byte-for-byte
+  identical if updating either side. The recipient is read from
+  `CONTACT_FORM_RECIPIENT_EMAIL` (env var, not hardcoded, per the same
+  contract) and fails closed (throws, logged) if unset.
+  **This gateway is loopback-only — it does not exist on a local dev
+  machine, only inside an actual Node.js Hosting container.** Confirmed
+  locally (2026-09-09): the call fails with `email gateway unreachable:
+  fetch failed` exactly as expected; the contact form still writes to
+  `contact_messages` (schema in [db/schema.sql](db/schema.sql)) and still
+  returns success to the visitor either way, so a submission is never
+  silently lost. **Real delivery can only be verified once actually
+  deployed to Preview/Publish** — do that check before assuming this
+  works end-to-end.
+- **Purchase confirmation** deliberately still uses **Brevo's REST API**
+  ([src/lib/email.ts](src/lib/email.ts), `BREVO_API_KEY`) — a conscious
+  choice to keep it off the GoDaddy gateway (2026-09-09), even though the
+  gateway would also work for this. Sent from the `checkout.session.completed`
+  handler in [api/webhooks/stripe/route.ts](src/app/api/webhooks/stripe/route.ts)
+  (`sendPurchaseNotification`) to whichever email the customer checked out
+  with, from `ally@thelocaldesk.au` as "The Local Desk" — that sender
+  address must stay verified in Brevo (Settings > Senders & IP) or every
+  send fails. Fetches the line item's product name via
+  `stripe.checkout.sessions.listLineItems` (not on the webhook payload by
+  default) and formats the amount from `session.amount_total`. Wrapped in
+  its own try/catch **inside** `handleCheckoutCompleted` — the purchase is
+  already recorded in `subscriptions`/`bookings` by that point, and a
+  thrown error here would make Stripe retry the whole webhook event for no
+  reason (the DB writes are already idempotent, so a retry wouldn't even
+  give the email a different outcome). Confirmed working end-to-end
+  (2026-09-08): a real subscription checkout (test card, Stripe
+  CLI-forwarded webhooks) → `subscriptions` row written + confirmation
+  email received with no errors logged.
+
+The newsletter subscribe form
+([SubscribeSection.tsx](src/components/SubscribeSection.tsx)) is a third,
+unrelated path — it posts straight to Brevo's own `sib-forms` endpoint
+client-side and needs no API key at all.
+
+**`BREVO_API_KEY` needs adding to GoDaddy's env vars** (for purchase
+confirmations only now) **and so does `CONTACT_FORM_RECIPIENT_EMAIL`**
+(for the contact form) **before either works on Preview/Publish** — as of
+2026-09-09 neither has been added there yet, only set in the local `.env`.
+`BREVO_API_KEY` comes from Brevo Dashboard > Settings > SMTP & API > API
+Keys; `CONTACT_FORM_RECIPIENT_EMAIL` is just `ally@thelocaldesk.au`, no
+secret involved.
 
 ## Known gotchas already worked around in code
 
@@ -80,17 +280,51 @@ own webhook destination, since each has a different signing secret.
 - `next` is pinned to `^16.3.2` (upgraded from `^15.1.0`) to clear
   high-severity `postcss`/`sharp` advisories `npm audit` flagged in the
   resolved 15.x bundle.
+- [next.config.ts](next.config.ts) sets
+  `allowedDevOrigins: ['*.airoapp.ai']` — Preview serves the app through a
+  proxy on that domain rather than the dev server's own origin, which
+  Next's dev server blocks by default (client JS chunks/HMR would otherwise
+  fail to load, even though the initial page request still returns 200).
+- Local testing against a real MySQL instance needs env vars exported into
+  the shell before `npm start`, e.g. `set -a; source .env; set +a; npm start`.
+  `next()`'s programmatic API (used by the custom `server.js`) does **not**
+  load `.env` before top-level code runs — only Next's own CLI
+  (`next build`/`next dev`) does that eagerly — so `db/apply-schema.js` sees
+  empty `DB_*` vars and fails auth if `.env` isn't exported first. This
+  isn't a problem on GoDaddy, since secrets are injected as real process env
+  vars before Node starts, not via a `.env` file.
 
 ## Status
 
-Verified working: production build, server binding, MySQL schema
-auto-creation (tested end-to-end against a real local MySQL instance), and
-the Preview environment's Checkout flow reaching Stripe's payment page.
+Verified working, end-to-end including a real webhook write to the
+database:
+- **Local**: subscription checkout, one-time purchase (Day Pass), and
+  subscription cancellation (`customer.subscription.deleted`) all confirmed
+  against a local MySQL instance via Stripe CLI-forwarded webhooks.
+- **Preview** (2026-09-04): subscription checkout and one-time purchase
+  (Day Pass) both confirmed against GoDaddy's actual Preview deployment (not
+  just local) — including webhook-driven DB writes, using a real
+  Stripe-delivered webhook (not CLI-forwarded). Required an explicit
+  **Restart** (not just "Update Preview") to get `server.js` actually
+  running, and the `?airoShareToken=...` webhook URL workaround above.
+  Subscription cancellation not yet re-tested against Preview specifically
+  (only verified locally so far).
 
-Not yet verified: a completed test payment actually landing a row in
-`subscriptions` via the webhook; the one-time purchase flow (Day
-Pass/Meeting Room); subscription cancellation
-(`customer.subscription.deleted`); and the Publish (production) environment,
-which has no secrets configured yet — it needs its own DB credentials (from
-its own Database tab), live-mode Stripe keys, and a separate live-mode
-webhook endpoint before connecting the real domain and publishing.
+Not yet done: the **Publish** (production) cutover. As of 2026-09-04 the app
+has never been published — GoDaddy's dashboard shows "You haven't yet
+published your app." Publishing needs: clicking "Publish to Live" (may
+require payment, though the current beta allows 1 free published app), its
+own DB credentials, live-mode Stripe keys, a separate live-mode webhook
+endpoint, and confirmation of whether the same access-gate/share-token
+requirement applies to a published app (untested — likely not, but not
+verified). Deliberately deferred until the app itself is feature-complete.
+
+<!-- BEGIN:nextjs-agent-rules -->
+
+# This is NOT the Next.js you know
+
+This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
+
+This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
+
+<!-- END:nextjs-agent-rules -->
