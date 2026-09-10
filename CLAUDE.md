@@ -151,6 +151,18 @@ keeps failing — a mis-pasted secret was the actual root cause the one time
 this got debugged at length (see git history / session notes around
 2026-09-04).
 
+**Only one test-mode webhook endpoint should exist: Preview's** (share-token
+URL above). A second, stray test-mode endpoint pointed at
+`https://thelocaldesk.au/api/webhooks/stripe` (created 2026-08-25, before
+the domain was attached to anything) sat there silently failing until
+Stripe emailed a disable-warning on 2026-09-10 — deleted that day. It could
+never have worked once `thelocaldesk.au` became the live/Publish domain
+running live keys: the app verifies webhook signatures against
+`STRIPE_WEBHOOK_SECRET`, and a test-mode event's signature will never
+match a live-mode secret. Don't recreate a test-mode endpoint pointing at
+the live domain — test-mode webhook testing belongs on Preview's endpoint
+or local `stripe listen`, never on `thelocaldesk.au`.
+
 ## Legal / compliance pages
 
 Three pages exist to meet Australian Consumer Law / Privacy Act obligations
