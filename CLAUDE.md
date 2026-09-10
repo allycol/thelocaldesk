@@ -281,13 +281,50 @@ The newsletter subscribe form
 unrelated path — it posts straight to Brevo's own `sib-forms` endpoint
 client-side and needs no API key at all.
 
-**`BREVO_API_KEY` needs adding to GoDaddy's env vars** (for purchase
-confirmations only now) **and so does `CONTACT_FORM_RECIPIENT_EMAIL`**
-(for the contact form) **before either works on Preview/Publish** — as of
-2026-09-09 neither has been added there yet, only set in the local `.env`.
-`BREVO_API_KEY` comes from Brevo Dashboard > Settings > SMTP & API > API
-Keys; `CONTACT_FORM_RECIPIENT_EMAIL` is just `ally@thelocaldesk.au`, no
-secret involved.
+Both `BREVO_API_KEY` and `CONTACT_FORM_RECIPIENT_EMAIL` are confirmed set
+in GoDaddy's live env vars as of the 2026-09-10 Publish cutover (see
+Status below) — the real end-to-end purchase test that day included a
+received confirmation email, which wouldn't have worked otherwise.
+
+## Brevo CRM sync — Prospect/Customer tagging
+
+Separate from both email paths above: [src/lib/brevo.ts](src/lib/brevo.ts)
+(`upsertBrevoCustomer`) tags every purchaser in Brevo's contact database via
+a custom **`CUSTOMER_STATUS`** attribute (plain text attribute, values
+`"Prospect"` / `"Customer"` — not a Brevo "category" enum, so it's simpler
+to write from code and Brevo's segment filters work identically either
+way). Called from `handleCheckoutCompleted` in
+[api/webhooks/stripe/route.ts](src/app/api/webhooks/stripe/route.ts),
+alongside (but independent of — separate try/catch) the purchase
+confirmation email, using the same `BREVO_API_KEY`.
+
+- **Upserts by email** (`updateEnabled: true`) — a customer who never
+  subscribed to the newsletter still gets a Brevo contact created, not
+  just updated.
+- Sets `CUSTOMER_STATUS: "Customer"` and splits Stripe Checkout's "name on
+  card" (`session.customer_details.name`) into `FIRSTNAME`/`LASTNAME` via
+  `splitName()` — first word is the first name, everything after is the
+  last name (so multi-word surnames survive intact).
+- All existing Brevo contacts (100, all from the newsletter subscribe
+  form, none of whom had purchased) were backfilled to
+  `CUSTOMER_STATUS: "Prospect"` in a one-off script when this was built
+  (2026-09-10) — **not** an ongoing/automatic process. A contact that
+  predates this feature and later unsubscribes-then-resubscribes, or any
+  other edge case outside the checkout flow, won't get a Prospect tag
+  applied automatically; only the checkout webhook ever sets
+  `CUSTOMER_STATUS` going forward (to `"Customer"` specifically — nothing
+  currently sets it back to `"Prospect"` or removes it).
+- Deliberately **not** cross-referenced against pre-existing purchases —
+  members who bought before this feature existed (e.g. the live purchase
+  test on Publish day) won't retroactively show as `"Customer"` in Brevo
+  unless they make another purchase. Worth a one-off reconciliation script
+  later if that backlog matters.
+
+Confirmed working end-to-end (2026-09-10): a real one-time test purchase
+with a brand-new email (not previously in Brevo) created a new contact
+with `CUSTOMER_STATUS: "Customer"` and correctly split first/last name,
+no errors logged. Test contact and its local DB rows deleted after
+verifying.
 
 ## Known gotchas already worked around in code
 

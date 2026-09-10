@@ -3,6 +3,7 @@ import type Stripe from 'stripe';
 import { stripe } from '@/lib/stripe';
 import { pool } from '@/lib/db';
 import { sendPurchaseConfirmation } from '@/lib/email';
+import { upsertBrevoCustomer } from '@/lib/brevo';
 
 // Route handlers get the raw, unparsed Request body — needed here because
 // Stripe signature verification hashes the exact bytes Stripe sent.
@@ -143,15 +144,21 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
     }
   }
 
-  // A failed confirmation email shouldn't fail the whole webhook — the
-  // purchase is already recorded above, and a thrown error here would make
-  // Stripe retry the event (redundant, since the DB writes are already
-  // idempotent) without actually fixing the email problem.
+  // A failed confirmation email or CRM sync shouldn't fail the whole
+  // webhook — the purchase is already recorded above, and a thrown error
+  // here would make Stripe retry the event (redundant, since the DB writes
+  // are already idempotent) without actually fixing either problem.
   if (email) {
     try {
       await sendPurchaseNotification(session, email, invoicePdfUrl);
     } catch (err) {
       console.error('sendPurchaseConfirmation failed:', err);
+    }
+
+    try {
+      await upsertBrevoCustomer({ email, name: session.customer_details?.name ?? null });
+    } catch (err) {
+      console.error('upsertBrevoCustomer failed:', err);
     }
   }
 }
