@@ -68,3 +68,38 @@ CREATE TABLE IF NOT EXISTS contact_messages (
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   KEY idx_contact_messages_created_at (created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Print jobs ("Printing" page): uploaded files live here, split into small
+-- chunks so a single INSERT never exceeds a managed DB's max_allowed_packet.
+-- Customers upload before paying, so rows start 'pending' and the Stripe
+-- webhook flips them to 'paid'. Rows are purged lazily (see
+-- src/lib/printFiles.ts) — unpaid after 2 days, everything after 30.
+CREATE TABLE IF NOT EXISTS print_orders (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  ref CHAR(8) NOT NULL,
+  price_id VARCHAR(255) NOT NULL,
+  quantity INT UNSIGNED NOT NULL,
+  status VARCHAR(20) NOT NULL DEFAULT 'pending',
+  stripe_checkout_session_id VARCHAR(255) NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_print_orders_ref (ref),
+  KEY idx_print_orders_created_at (created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS print_files (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  order_id BIGINT UNSIGNED NOT NULL,
+  filename VARCHAR(255) NOT NULL,
+  mime_type VARCHAR(100) NOT NULL,
+  size_bytes INT UNSIGNED NOT NULL,
+  KEY idx_print_files_order_id (order_id),
+  CONSTRAINT fk_print_files_order FOREIGN KEY (order_id) REFERENCES print_orders(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS print_file_chunks (
+  file_id BIGINT UNSIGNED NOT NULL,
+  seq INT UNSIGNED NOT NULL,
+  data MEDIUMBLOB NOT NULL,
+  PRIMARY KEY (file_id, seq),
+  CONSTRAINT fk_print_chunks_file FOREIGN KEY (file_id) REFERENCES print_files(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

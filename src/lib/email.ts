@@ -88,3 +88,36 @@ export async function sendAccountLink(params: { toEmail: string; verifyUrl: stri
       `The Local Desk`,
   });
 }
+
+// Tells the owner a print job has been paid for and where the files are.
+// Files live in MySQL (see printFiles.ts) and are linked rather than
+// attached, so size limits don't matter.
+export async function sendPrintOrderPaid(params: {
+  ref: string;
+  productName: string;
+  quantity: number;
+  amountFormatted: string;
+  customerName: string | null;
+  customerEmail: string | null;
+  files: Array<{ filename: string; sizeBytes: number; url: string }>;
+}): Promise<void> {
+  const recipient = process.env.CONTACT_FORM_RECIPIENT_EMAIL;
+  if (!recipient) throw new Error('CONTACT_FORM_RECIPIENT_EMAIL is not set');
+
+  const fileLines = params.files.length
+    ? params.files.map((f) => `- ${f.filename} (${(f.sizeBytes / 1024 / 1024).toFixed(1)}MB)\n  ${f.url}`).join('\n')
+    : '(no files found — they may have been deleted, or the upload was lost; contact the customer)';
+
+  await sendEmail({
+    senderName: 'The Local Desk website',
+    to: [{ email: recipient }],
+    subject: `Print order ${params.ref} PAID — ${params.quantity} × ${params.productName}`,
+    textContent:
+      `A print order has been paid.\n\n` +
+      `Order ref: ${params.ref}\n` +
+      `Item: ${params.quantity} × ${params.productName}\n` +
+      `Total: ${params.amountFormatted}\n` +
+      `Customer: ${params.customerName ?? '(no name)'} <${params.customerEmail ?? 'no email'}>\n\n` +
+      `Files (download links expire in 30 days, files are deleted then):\n${fileLines}\n`,
+  });
+}

@@ -8,6 +8,15 @@ const nextConfig: NextConfig = {
   // *.airoapp.ai rather than the dev server's own origin, which Next's dev
   // server blocks by default (see Next.js `allowedDevOrigins`).
   allowedDevOrigins: ['*.airoapp.ai'],
+
+  // /pricing became /coworking when services were split out into separate
+  // pages — keep old links/bookmarks working (query string is preserved).
+  async redirects() {
+    return [
+      { source: '/pricing', destination: '/coworking', permanent: true },
+      { source: '/space-features', destination: '/the-space', permanent: true },
+    ];
+  },
 };
 
 export default nextConfig;

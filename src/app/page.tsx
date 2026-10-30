@@ -1,5 +1,7 @@
 import Link from 'next/link';
-import { CATEGORY_INFO, CATEGORY_LABELS, HOME_CATEGORY_ORDER, getProducts, productsByCategory } from '@/lib/products';
+import { CategoryIcon } from '@/components/CategoryIcon';
+import { HeroSlider } from '@/components/HeroSlider';
+import { CATEGORY_INFO, CATEGORY_LABELS, HOME_CATEGORY_ORDER, categoryHref, getProducts, productsByCategory } from '@/lib/products';
 
 // Products are managed in Stripe, not this codebase — fetch on every
 // request rather than at build time. `revalidate` alone still statically
@@ -21,19 +23,26 @@ export default async function HomePage() {
           A thoughtfully considered shared workspace: hot-desks, dedicated workstations &amp; collaboration
           areas. Work, meet, create together.
         </p>
-        <Link href="/pricing" className="hero-cta">
+        <Link href="/coworking" className="hero-cta">
           View pricing
         </Link>
       </div>
 
       <div className="home-banner">
-        <img src="/images/home-banner.jpg" alt="Members working at The Local Desk" />
+        <HeroSlider />
       </div>
 
       <div className="container">
         <div className="section-heading">
-          <h2>Find your space</h2>
-          <Link href="/pricing">View all pricing →</Link>
+          <div>
+            <h2>Find your space</h2>
+            <p className="section-intro">
+              Whether you need a desk of your own every day, a few days a week, or just somewhere to
+              drop in for an afternoon, there&rsquo;s an option to suit. Choose the plan that fits the
+              way you work.
+            </p>
+          </div>
+          <Link href="/coworking">View all pricing →</Link>
         </div>
         <div className="teaser-grid">
           {HOME_CATEGORY_ORDER.map((category) => {
@@ -44,23 +53,24 @@ export default async function HomePage() {
             const info = CATEGORY_INFO[category];
 
             return (
-              <Link href={`/pricing?category=${category}`} className="teaser-card" key={category}>
+              <Link href={categoryHref(category)} className="teaser-card" key={category}>
+                <div className="teaser-body">
+                  <CategoryIcon category={category} />
+                  <h3>{CATEGORY_LABELS[category]}</h3>
+                  <p className="teaser-description">{info.description}</p>
+                  <span className="from-price">From {fromPrice}</span>
+                </div>
                 {info.image && (
                   <div className="teaser-image">
                     <img src={info.image} alt="" />
                   </div>
                 )}
-                <div className="teaser-body">
-                  <h3>{CATEGORY_LABELS[category]}</h3>
-                  <p className="teaser-description">{info.description}</p>
-                  <span className="from-price">From {fromPrice}</span>
-                </div>
               </Link>
             );
           })}
         </div>
 
-        <Link href="/pricing?category=students" className="student-promo">
+        <Link href="/coworking?category=students" className="student-promo">
           <p>
             <strong>📚 Student or tutor?</strong> Whether you need a quiet place to study or a space
             to teach, we&rsquo;ve got flexible passes built for you.
@@ -68,6 +78,60 @@ export default async function HomePage() {
           <span className="student-promo-cta">See student pricing →</span>
         </Link>
       </div>
+
+      <section className="feature-band">
+        <div className="container feature-modules">
+          <div className="feature-module">
+            <div className="feature-module-image">
+              <img src="/images/home-space.jpg" alt="" />
+            </div>
+            <div className="feature-module-text">
+              <h2>Everything you need to get on with it</h2>
+              <p>
+                Hot-desks and dedicated workstations, meeting rooms for when you need to talk, a kitchen
+                for the all-important coffee, and flexible access that fits around your day. It&rsquo;s a
+                workspace that just works, so you can focus on the work itself.
+              </p>
+              <Link href="/the-space" className="feature-module-link">
+                Explore the space →
+              </Link>
+            </div>
+          </div>
+
+          <div className="feature-module feature-module-reverse">
+            <div className="feature-module-image">
+              <img src="/images/printing.jpg" alt="" />
+            </div>
+            <div className="feature-module-text">
+              <h2>Printing, without the hassle</h2>
+              <p>
+                Printing is free for our members. Not a member? Upload your files online, pay securely,
+                and we&rsquo;ll print them for you &mdash; black &amp; white or colour, A4 or A3, with no
+                trip to the print shop.
+              </p>
+              <Link href="/printing" className="feature-module-link">
+                Get something printed →
+              </Link>
+            </div>
+          </div>
+
+          <div className="feature-module">
+            <div className="feature-module-image">
+              <img src="/images/services/events-hero.jpg" alt="" />
+            </div>
+            <div className="feature-module-text">
+              <h2>A space for your next event</h2>
+              <p>
+                Workshops, meetups, launches and team days, hosted in the heart of Kiama. We&rsquo;ll
+                help you find the right setup so you can focus on the people in the room.
+              </p>
+              <Link href="/events" className="feature-module-link">
+                Plan an event →
+              </Link>
+            </div>
+          </div>
+        </div>
+      </section>
 
       <div className="container">
         <section className="founder-note">

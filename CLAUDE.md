@@ -83,11 +83,12 @@ Sandbox account: "AIC Ecommerce PTY Ltd". **Products, prices, descriptions,
 and images are managed entirely in the Stripe Dashboard**, not hardcoded —
 [src/lib/products.ts](src/lib/products.ts) fetches them live
 (`stripe.products.list`, fetched fresh on every request — see the
-`force-dynamic` gotcha above — on `/`, `/pricing`, and
+`force-dynamic` gotcha above — on `/`, `/coworking`, `/virtual-office`, `/printing`, `/events`, and
 `/membership-agreement`), so there's no `plans.ts`-style price-ID file to
 keep in sync. Every product needs Product metadata `category` set to one of
-`full_time` / `flexible` / `daily` / `virtual` (see `CATEGORY_ORDER` in
-products.ts) — a product with a missing or unrecognised category is
+`full_time` / `flexible` / `daily` / `virtual` / `students` / `printing` /
+`events` (see `CATEGORY_ORDER` in products.ts, and "Site structure" below for
+which page each one appears on) — a product with a missing or unrecognised category is
 silently skipped from the site. Adding a 5th category needs a code change
 (that Set of valid values, `CATEGORY_LABELS`, `CATEGORY_INFO`); everything
 else about a new product is Dashboard-only.
@@ -163,6 +164,89 @@ match a live-mode secret. Don't recreate a test-mode endpoint pointing at
 the live domain — test-mode webhook testing belongs on Preview's endpoint
 or local `stripe listen`, never on `thelocaldesk.au`.
 
+## Site structure and content (as of 2026-10-30)
+
+Nav ([Masthead.tsx](src/components/Masthead.tsx)): **The space**
+(`/the-space`), **Services** dropdown, **Location**, **Get in touch**, and a
+divider-separated **Manage membership** (`/account`) at the end. The full
+nav only shows at ≥960px (below that it's the hamburger) — the extra link
+doesn't fit beside the logo at tablet widths. The logo links home.
+
+- `/` — homepage: `HeroSlider` banner (3 photos, crossfade, pauses on
+  hover/focus, no autoplay under `prefers-reduced-motion`), "Find your
+  space" cards (`HOME_CATEGORY_ORDER` = full_time/flexible/daily/virtual,
+  with icons from `CategoryIcon.tsx` and photos from `CATEGORY_INFO` in
+  products.ts), student promo, three alternating white-band modules
+  (space → `/the-space`, printing, events), founder note.
+- `/the-space` (old `/space-features` redirects here) — editorial page, all
+  copy is draft.
+- **Service pages** — `/coworking`, `/virtual-office`, `/printing`,
+  `/events` share `ServiceHero` (shallow banner + H1 + intro copy) then a
+  product listing. `/coworking` was `/pricing` (redirect in
+  `next.config.ts`; query strings preserved). `/graphic-design` has no
+  Stripe products — it's a fully editorial page (same classes as
+  `/the-space`: `ed-*`) with a link out to allycolquhoun.au; all copy is
+  draft, and "Hi, I'm Ally" currently reuses the small homepage founder
+  photo.
+- Banner crops: `ServiceHero`'s `position` prop is a CSS `object-position`
+  chosen per photo, because the banner is only 32:7 on desktop — re-check
+  the crop whenever a hero photo is swapped.
+
+**Categories → pages:** `full_time`/`flexible`/`daily`/`students` on
+`/coworking` (tabs, `COWORKING_CATEGORY_ORDER`), `virtual` on
+`/virtual-office`, `printing` on `/printing`, `events` on `/events`.
+`CATEGORY_ORDER` (membership-agreement price table) deliberately excludes
+printing and events. Category copy/photos are edited in
+`CATEGORY_INFO`, not Stripe.
+
+**Test vs live catalog:** the printing and events Stripe products were
+created in test mode only. They must be copied to live mode (with
+`category` metadata, tax-inclusive prices) before those pages show anything
+for real customers — until then they render just the hero + enquiry button.
+
+### Printing orders
+
+`/printing` → quantity picker → `/printing/upload` (files + checkout).
+Flow: `POST /api/print/upload` stores up to 5 files (10MB each; pdf, jpg,
+png, doc, docx) as chunked `MEDIUMBLOB` rows in `print_orders` /
+`print_files` / `print_file_chunks` (see `db/schema.sql`; chunked so one
+INSERT never exceeds `max_allowed_packet`), creates a Checkout Session with
+`metadata.print_ref`, and the `checkout.session.completed` webhook marks the
+order paid and emails the owner (`sendPrintOrderPaid`, to
+`CONTACT_FORM_RECIPIENT_EMAIL`, via Brevo) with HMAC-signed download links
+(`ACCOUNT_LINK_SECRET`, served by `/api/print/files/[id]`). Purge is lazy
+(`purgeOldPrintOrders` runs on upload): unpaid orders after 2 days, all
+orders after 30 days (matches link expiry). The upload throttle is
+in-memory, so it resets on restart. Products with a unit price too low for
+Stripe's 50c minimum charge get a derived `minQuantity`.
+Printing is **free for members** (copy says so) — non-members pay per page.
+Not yet done: a print-file retention note in the Privacy Policy, and real
+testing of 10MB uploads through GoDaddy's proxy.
+
+### Analytics
+
+Google Analytics 4 (`G-XWFKQ5PY03`) is loaded in the root layout. The init
+script only calls `gtag('config')` when the hostname is `thelocaldesk.au`
+(or a subdomain), so local dev and the GoDaddy Preview URL send nothing.
+No cookie-consent banner by design (Australia has no cookie-consent rule;
+disclosure is in the Privacy Policy).
+
+### Layout / CSS conventions
+
+`globals.css` `:root` defines `--section-space` and `--gutter`; the
+container, masthead and footer max out at 1440px. Page-specific blocks use
+prefixes (`ed-` editorial, `feature-` white-band modules, `teaser-` home
+cards). Beware specificity leaks between `.hero p` / `.feature-module-text p`
+and the `ed-*` classes (override with more specific selectors). H1/H2 use
+Effra (Typekit) at weight 500.
+
+### Images
+
+Stock/real photos live in `public/images/` (page-specific ones in
+`public/images/services/`). The Graphic design hero
+(`services/graphic-design-hero.jpg`) is still an Unsplash placeholder, and
+the Graphic design portfolio shots are mockups of real client work.
+
 ## Legal / compliance pages
 
 Three pages exist to meet Australian Consumer Law / Privacy Act obligations
@@ -175,7 +259,7 @@ page. Content came from real docx drafts (see git history around
 AIC Ecommerce Pty Ltd is GST-registered.
 
 The **Membership Agreement's price table is generated live from Stripe**
-(same `getProducts()`/`force-dynamic` pattern as `/pricing`), not
+(same `getProducts()`/`force-dynamic` pattern as `/coworking`), not
 hardcoded — grouped by `CATEGORY_ORDER`, so a new product with a valid
 `category` shows up there automatically. Don't hand-edit that table back to
 static rows.
@@ -340,10 +424,15 @@ verifying.
 
 ## Known gotchas already worked around in code
 
+- **Local production builds:** run `env -u NODE_ENV npm run build`. `.env`
+  sets `NODE_ENV=development`, which makes `next build` fail with a
+  `/_global-error` "useContext null" prerender error if it's exported into
+  the shell. (Also, `npm start` locally runs `server.js` in dev mode.)
 - `package.json`'s `build` script is `rm -rf .next && next build`, not
   plain `next build` — **don't simplify this away.** GoDaddy's "Try
   rebuild" appears to persist the `.next` directory across attempts
-  instead of wiping it. After the `/products` → `/pricing` and
+  instead of wiping it. After the `/products` → `/pricing` (since renamed
+  again to `/coworking`) and
   `/where-we-are` → `/location` route rename (2026-09-09), rebuilds
   started failing with an error pointing at the deleted
   `src/app/products/page.tsx` — almost certainly a stale

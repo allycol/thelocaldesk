@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server';
 import type Stripe from 'stripe';
-import { stripe } from '@/lib/stripe';
+import { stripe, APP_BASE_URL } from '@/lib/stripe';
 import { pool } from '@/lib/db';
-import { sendPurchaseConfirmation } from '@/lib/email';
+import { sendPrintOrderPaid, sendPurchaseConfirmation } from '@/lib/email';
+import { listPrintFiles, markPrintOrderPaid, printFileToken } from '@/lib/printFiles';
 import { upsertBrevoCustomer } from '@/lib/brevo';
 
 // Route handlers get the raw, unparsed Request body — needed here because
@@ -161,18 +162,60 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
       console.error('upsertBrevoCustomer failed:', err);
     }
   }
+
+  // Print jobs: files were uploaded (and the order row created) before
+  // checkout; now that it's paid, flag it and tell the owner what to print.
+  const printRef = session.metadata?.print_ref;
+  if (printRef) {
+    try {
+      await markPrintOrderPaid(printRef, session.id);
+      await notifyPrintOrderPaid(session, printRef);
+    } catch (err) {
+      console.error('print order handling failed:', err);
+    }
+  }
 }
 
-async function sendPurchaseNotification(session: Stripe.Checkout.Session, email: string, invoicePdfUrl: string | null) {
-  const lineItems = await stripe.checkout.sessions.listLineItems(session.id, { expand: ['data.price.product'] });
-  const firstItem = lineItems.data[0];
-  const product = firstItem?.price?.product;
-  const productName = product && typeof product !== 'string' && !product.deleted ? product.name : 'your order';
+async function notifyPrintOrderPaid(session: Stripe.Checkout.Session, ref: string) {
+  const { productName, quantity } = await lineItemSummary(session);
+  const files = await listPrintFiles(ref);
 
-  const amountFormatted = new Intl.NumberFormat('en-AU', {
+  await sendPrintOrderPaid({
+    ref,
+    productName,
+    quantity,
+    amountFormatted: formatAmount(session),
+    customerName: session.customer_details?.name ?? null,
+    customerEmail: session.customer_details?.email ?? session.customer_email ?? null,
+    files: files.map((f) => ({
+      filename: f.filename,
+      sizeBytes: f.sizeBytes,
+      url: `${APP_BASE_URL}/api/print/files/${f.id}?token=${encodeURIComponent(printFileToken(f.id))}`,
+    })),
+  });
+}
+
+function formatAmount(session: Stripe.Checkout.Session): string {
+  return new Intl.NumberFormat('en-AU', {
     style: 'currency',
     currency: (session.currency ?? 'aud').toUpperCase(),
   }).format((session.amount_total ?? 0) / 100);
+}
+
+async function lineItemSummary(session: Stripe.Checkout.Session): Promise<{ productName: string; quantity: number }> {
+  const lineItems = await stripe.checkout.sessions.listLineItems(session.id, { expand: ['data.price.product'] });
+  const firstItem = lineItems.data[0];
+  const product = firstItem?.price?.product;
+  return {
+    productName: product && typeof product !== 'string' && !product.deleted ? product.name : 'your order',
+    quantity: firstItem?.quantity ?? 1,
+  };
+}
+
+async function sendPurchaseNotification(session: Stripe.Checkout.Session, email: string, invoicePdfUrl: string | null) {
+  const { productName: name, quantity } = await lineItemSummary(session);
+  const productName = quantity > 1 ? `${name} × ${quantity}` : name;
+  const amountFormatted = formatAmount(session);
 
   await sendPurchaseConfirmation({
     toEmail: email,

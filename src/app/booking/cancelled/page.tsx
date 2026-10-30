@@ -6,7 +6,7 @@ export default function BookingCancelledPage() {
       <div className="container">
         <h1>Checkout cancelled</h1>
         <p className="subtitle">No charge was made. Head back whenever you&apos;re ready.</p>
-        <Link href="/pricing" className="hero-cta">
+        <Link href="/coworking" className="hero-cta">
           Back to pricing
         </Link>
       </div>
