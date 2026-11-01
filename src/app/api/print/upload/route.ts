@@ -90,7 +90,7 @@ export async function POST(req: Request) {
       consent_collection: { terms_of_service: 'required' },
       invoice_creation: { enabled: true },
       metadata: { item_key: priceId, print_ref: ref },
-      success_url: `${APP_BASE_URL}/booking/success?session_id={CHECKOUT_SESSION_ID}`,
+      success_url: `${APP_BASE_URL}/booking/success?session_id={CHECKOUT_SESSION_ID}&print_ref=${ref}`,
       cancel_url: `${APP_BASE_URL}/printing`,
     });
 

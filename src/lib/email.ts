@@ -46,17 +46,30 @@ export async function sendPurchaseConfirmation(params: {
   amountFormatted: string;
   isSubscription: boolean;
   invoicePdfUrl: string | null;
+  printRef?: string; // set for print orders, which get their own wording
 }): Promise<void> {
-  const { toEmail, productName, amountFormatted, isSubscription, invoicePdfUrl } = params;
+  const { toEmail, productName, amountFormatted, isSubscription, invoicePdfUrl, printRef } = params;
 
-  const subject = isSubscription ? `You're in — welcome to The Local Desk` : `Booking confirmed — ${productName}`;
+  const subject = printRef
+    ? `Print order received — ${productName}`
+    : isSubscription
+      ? `You're in — welcome to The Local Desk`
+      : `Booking confirmed — ${productName}`;
 
   // GST-registered sales need a real tax invoice, not just a payment
   // receipt — invoicePdfUrl is Stripe's own hosted PDF (ABN, GST
   // breakdown included), not something we generate ourselves.
   const invoiceLine = invoicePdfUrl ? `\n\nTax invoice: ${invoicePdfUrl}` : '';
 
-  const body = isSubscription
+  const body = printRef
+    ? `Thanks for your print order!\n\n` +
+      `Item: ${productName}\n` +
+      `Amount: ${amountFormatted}\n` +
+      `Order reference: ${printRef}${invoiceLine}\n\n` +
+      `We'll print your order and email you as soon as it's ready. Pick it up whenever suits you — ` +
+      `print orders are left just inside the front door, on the left.\n\n` +
+      `The Local Desk, Shop 2, 27 Collins Street, Kiama NSW 2533`
+    : isSubscription
     ? `Thanks for joining The Local Desk!\n\n` +
       `Plan: ${productName}\n` +
       `Amount: ${amountFormatted}${invoiceLine}\n\n` +

@@ -223,6 +223,7 @@ async function sendPurchaseNotification(session: Stripe.Checkout.Session, email:
     amountFormatted,
     isSubscription: session.mode === 'subscription',
     invoicePdfUrl,
+    printRef: session.metadata?.print_ref,
   });
 }
 
