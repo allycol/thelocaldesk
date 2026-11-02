@@ -1668,6 +1668,38 @@ h1 {
   margin-bottom: 0.5rem;
 }
 
+/* Sub-clauses (13.1, 13.2 …) and their (a), (b) … paragraphs */
+.legal-page h3 {
+  font-size: 1rem;
+  margin: 1.75rem 0 0.75rem;
+}
+
+.legal-page ol.legal-alpha {
+  list-style: none;
+  counter-reset: legal-alpha;
+  margin: 0 0 1rem;
+  padding-left: 0;
+}
+
+.legal-page ol.legal-alpha > li {
+  counter-increment: legal-alpha;
+  position: relative;
+  padding-left: 2rem;
+}
+
+.legal-page ol.legal-alpha > li::before {
+  content: '(' counter(legal-alpha, lower-alpha) ')';
+  position: absolute;
+  left: 0;
+}
+
+.legal-letter {
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 1.5rem 1.25rem 0.5rem;
+}
+
 .legal-page a {
   color: var(--accent);
 }
